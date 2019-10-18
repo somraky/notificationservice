@@ -45,7 +45,7 @@ var upload = multer({
 
 var SmokeSchema = new Schema({
 	timeStamp: {type: Date, default: Date.now},
-        img: {data: Buffer, contentType: String}
+	img: {data: Buffer, contentType: String}
 });
 
 var Dsmoke = mongoose.model('Dsmoke', SmokeSchema);
@@ -53,9 +53,9 @@ var Dsmoke = mongoose.model('Dsmoke', SmokeSchema);
 app.post('/pushsmoke', upload.single('smoke'), (req, res) => {
 	console.log(req.body);
 	var dsmoke = new Dsmoke({});
-	var read_img = fs.readFileSync(req.file.path);
-	dsmoke.img.data = read_img;
-	dsmoke.img.contentType = req.file.mimetype;
+	var smoke_img = fs.readFileSync(req.file.path);
+        dsmoke.img.data = smoke_img;
+        dsmoke.img.contentType = req.file.mimetype;
 	dsmoke.save(function(err, dsmokes) {
 		if(err){
 			return consule.error(err);
@@ -68,7 +68,46 @@ app.post('/pushsmoke', upload.single('smoke'), (req, res) => {
 			console.log('detected smoke and saved to _id:' + dsmokes._id);
 		}
 	});
-	fs.unlinkSync(req.file.path);  //delete buffer image
+	fs.unlinkSync(req.file.path);
+});
+
+var UserSchema = new Schema({
+	UID: Number,
+	realname: String,
+	nickname: String,
+	gender: String,
+	DOB: Date,
+	age: Number,
+	social: String,
+	img: {data: Buffer, contentType: String}
+});
+var UserModel = mongoose.model('User', UserSchema);
+
+app.post('/adduser', upload.single('image'), (req, res) => {
+	console.log(req.body);
+	console.log(req.file);
+	var user = new UserModel({
+		UID: req.body.UID,
+		realname: req.body.realname,
+		nickname: req.body.nickname,
+		gender: req.body.gender,
+		DOB: req.body.DOB,
+		age: req.body.age,
+		social: req.body.social
+	});
+	var profile_img = fs.readFileSync(req.file.path);
+	user.img.data = profile_img;
+	user.img.contentType = req.file.mimetype;
+	user.save(function(err, user) {
+		if(err){
+			return console.error(err);
+		} else{
+			res.json({
+				'status':'saved to database'
+			});
+		}
+	});
+	fs.unlinkSync(req.file.path);
 });
 
 var PersonSchema = new Schema({
@@ -78,7 +117,6 @@ var PersonSchema = new Schema({
 	face: {data: Buffer, contentType: String},
 	frame: {data: Buffer, contentType: String}
 });
-
 var Dperson = mongoose.model('Dperson', PersonSchema);
 
 app.post('/pushperson', upload.array('person', 2), (req, res) => {
@@ -115,15 +153,81 @@ app.post('/pushperson', upload.array('person', 2), (req, res) => {
 	fs.unlinkSync(paths[1]);
 });
 
-app.post('/multi', upload.array('images', 2) , (req, res) =>{
-	try {
-		var paths = req.files.map(file => file.path);
-		res.send(paths);
-		console.log(req.files);
-	} catch(error) {
-		console.log(error);
-		res.send(400);
-	}
+app.get('/getrecent', (req,res,next) => {
+	Dperson.aggregate([
+		{$group:
+    			{_id: "$UID",
+			face: {$last: "$face"},
+			frame: {$last: "$frame"},
+			description: {$last: "$description"},
+			timeStamp: {$last: "$timeStamp"},
+			oid: { $last: "$_id" }
+		}
+	},
+		{$project:
+			{_id: "$oid",
+			face: "$face",
+			frame: "$frame",
+			UID: "$_id",
+			description: "$description",
+			timeStamp: "$timeStamp",
+		}
+	},
+		{$sort: {timeStamp: 1}
+	}], function(err, docs){
+		if(err) return next(err);
+		var list = [];
+		console.log('GET Recent Person data');
+		docs.forEach(function(doc){
+			var bufferdata = {};
+			bufferdata._id = doc._id;
+			bufferdata.UID = doc.UID;
+			bufferdata.description = doc.description;
+			bufferdata.timestamp = doc.timeStamp;
+			list.unshift(bufferdata);
+		});
+		console.log("GET "+list.length+" records");
+		res.json(list);
+	});
+
+});
+
+app.get('/userdata/:uid', (req, res, next) => {
+	UserModel.findOne({UID:req.params.uid} , function (err, doc) {
+		if(err) return next(err);
+		var list = [];
+		var bufferdata = {};
+		bufferdata._id = doc._id;
+		bufferdata.UID = doc.UID;
+		bufferdata.realname = doc.realname;
+		bufferdata.nickname = doc.nickname;
+		bufferdata.gender = doc.gender;
+		bufferdata.DOB = doc.DOB;
+		bufferdata.age = doc.age;
+		bufferdata.social = doc.social;
+		console.log(bufferdata);
+		list.unshift(bufferdata);
+		console.log("GET User data");
+		res.json(list);
+	});
+});
+
+app.get('/getperson/:uid/:n', (req, res) => {
+	Dperson.find({UID: req.params.uid}).sort({$natural:-1}).limit(Number(req.params.n)).exec(function (err, docs){
+		if(err) console.log(err);
+		var list = [];
+		console.log('GET Person data UID: '+req.params.uid);
+		docs.forEach(function(doc){
+			var bufferdata = {};
+			bufferdata._id = doc._id;
+			bufferdata.UID = doc.UID;
+			bufferdata.description = doc.description;
+			bufferdata.timestamp = doc.timeStamp;
+			list.push(bufferdata);
+		});
+		console.log('GET '+list.length+' records');
+		res.json(list);
+	});
 });
 
 app.get('/getdata/:noti', (req, res, next) => {
@@ -140,7 +244,7 @@ app.get('/getdata/:noti', (req, res, next) => {
 				testformat.timestamp = doc.timeStamp;
 				list.unshift(testformat);
 			});
-			console.log("GET "+list.length+" data");
+			console.log("GET "+list.length+" records");
                         res.json(list);
 		});
 	}
@@ -157,13 +261,31 @@ app.get('/getdata/:noti', (req, res, next) => {
 });
 
 app.get('/showimg/:noti/:_id', (req, res, next) => {
-	if(req.params.noti === 'person'){
+	if(req.params.noti === 'frame'){
 		Dperson.findById(req.params._id, function (err, doc) {
 			if (err) res.send("Cannot find image please check _id");
 			else{
-				console.log('GET Person img _id: '+doc._id);
+				console.log('GET FRAME img _id: '+doc._id);
 				res.contentType('image/jpeg');
-   				res.send(doc.face.data);
+   				res.send(doc.frame.data);
+			}
+		});
+	} else if(req.params.noti === 'face'){
+		Dperson.findById(req.params._id, function (err, doc) {
+                        if (err) res.send("Cannot find image please check _id");
+                        else{
+                                console.log('GET FACE img _id: '+doc._id);
+                                res.contentType('image/jpeg');
+                                res.send(doc.face.data);
+                        }
+                });
+	} else if(req.params.noti === 'profile'){
+		UserModel.findOne({UID:req.params._id}, function (err,doc) {
+			if (err) res.send("Cannot find this profile image");
+			else{
+				console.log('GET Profile '+doc.UID+' image');
+				res.contentType('image/jpeg');
+				res.send(doc.img.data);
 			}
 		});
 	} else if(req.params.noti === 'smoke'){
