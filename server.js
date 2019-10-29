@@ -2,12 +2,12 @@ var express = require('express');
 var multer = require('multer');
 var fs = require('fs');
 var FCM = require('fcm-node');
-var serverKey = 'AAAA17V7QX0:APA91bEkWiCjSKIflemWoiQd3FHW_-PTF8_1JQaPFnQ6umlt_5batFcQF0VvzGpTrDKxhG1PXB4mscu4m-ohq8uO1qbVzgW98y49NvRls3dbEbnhmTiOBCC9BjZGfXy2lg-g3RF4Komk';
+var serverKey = '##############################';
 var fcm = new FCM(serverKey);
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
 var app = express();
-var uri = 'mongodb://somrak:58364685@localhost/project';
+var uri = '###################################';
 //mongoose.set('debug', true);
 var db = mongoose.connect(uri, { useNewUrlParser: true });
 
